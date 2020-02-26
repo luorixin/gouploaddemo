@@ -20,6 +20,10 @@ func main() {
   http.HandleFunc("/file/delete", handler.FileDeleteHandler)
   http.HandleFunc("/file/fastupload", handler.HTTPInterceptor(handler.TryFastUploadHandler))
 
+  http.HandleFunc("/file/mpupload/init", handler.HTTPInterceptor(handler.InitialMultipartUploadHandler))
+  http.HandleFunc("/file/mpupload/uppart", handler.HTTPInterceptor(handler.UploadPartHandler))
+  http.HandleFunc("/file/mpupload/complete", handler.HTTPInterceptor(handler.CompleteUploadHandler))
+
   http.HandleFunc("/user/signup", handler.SignupHandler)
   http.HandleFunc("/user/signin", handler.SignInHandler)
   http.HandleFunc("/user/info", handler.HTTPInterceptor(handler.UserInfoHandler))
