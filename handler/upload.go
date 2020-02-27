@@ -1,15 +1,20 @@
 package handler
 
 import (
+  cmn "demo/common"
+  cfg "demo/config"
   dblayer "demo/db"
   "demo/meta"
-	"demo/util"
-	"encoding/json"
-	"fmt"
-	"io"
-	"io/ioutil"
-	"net/http"
-	"os"
+  "demo/mq"
+  "demo/store/ceph"
+  "demo/store/oss"
+  "demo/util"
+  "encoding/json"
+  "fmt"
+  "io"
+  "io/ioutil"
+  "net/http"
+  "os"
   "strconv"
   "time"
 )
@@ -51,6 +56,50 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 		newFile.Seek(0, 0)
 		fileMeta.FileSha1 = util.FileSha1(newFile)
+
+    // 游标重新回到文件头部
+    newFile.Seek(0, 0)
+
+    if cfg.CurrentStoreType == cmn.StoreCeph {
+      // 文件写入Ceph存储
+      data, _ := ioutil.ReadAll(newFile)
+      cephPath := "/ceph/" + fileMeta.FileSha1
+      _ = ceph.PutObject("userfile", cephPath, data)
+      fileMeta.Location = cephPath
+    } else if cfg.CurrentStoreType == cmn.StoreOSS {
+      // 文件写入OSS存储
+      ossPath := "oss/" + fileMeta.FileSha1
+      // 判断写入OSS为同步还是异步
+      if !cfg.AsyncTransferEnable {
+        err = oss.Bucket().PutObject(ossPath, newFile)
+        if err != nil {
+          fmt.Println(err.Error())
+          w.Write([]byte("Upload failed!"))
+          return
+        }
+        fileMeta.Location = ossPath
+      } else {
+        // 写入异步转移任务队列
+        data := mq.TransferData{
+          FileHash:      fileMeta.FileSha1,
+          CurLocation:   fileMeta.Location,
+          DestLocation:  ossPath,
+          DestStoreType: cmn.StoreOSS,
+        }
+        pubData, _ := json.Marshal(data)
+        pubSuc := mq.Publish(
+          cfg.TransExchangeName,
+          cfg.TransOSSRoutingKey,
+          pubData,
+        )
+        if !pubSuc {
+          // TODO: 当前发送转移信息失败，稍后重试
+        }
+      }
+    }
+
+
+
 		_ = meta.UpdateFileMetaDB(fileMeta)
 
 		r.ParseForm()
