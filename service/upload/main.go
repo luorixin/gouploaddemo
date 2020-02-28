@@ -6,7 +6,7 @@ import (
   "net/http"
 )
 
-func main() {
+func main3() {
   // 静态资源处理
   // http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(assets.AssetFS())))
   http.Handle("/static/",
